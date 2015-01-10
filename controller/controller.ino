@@ -17,6 +17,7 @@ unsigned int heater_cycle_millis = 1200;
 unsigned int pump_cycle_millis = 5000;
 unsigned int temp_update_millis = 10000;
 unsigned int sol_update_millis = 100;
+unsigned int flow_update_millis = 2000;
 
 unsigned int pump_percent = 0;
 unsigned int heater_percent = 0;
@@ -26,15 +27,19 @@ unsigned long pump_transition_time = 0;
 unsigned long heater_transition_time = 0;
 unsigned long temp_update_time = 0;
 unsigned long sol_update_time = 0;
+unsigned long flow_update_time = 0;
 
 unsigned int temp1_int = 0;
 unsigned int temp1_rmndr = 0;
+volatile unsigned long int flow_count = 0;
 
 int pump_pin = 7;
 int heater_pin = 6;
-int solenoid_pin = 2;
-int flow_pin = 3;
+int solenoid_pin = 4;
+int wtr_rqst_pin = 3;
 int temp_pin = 0;
+int flow_pin = 2;
+
 int message_bytes[4];
 int message_ptr = 0;
 
@@ -56,14 +61,19 @@ void change_heater(boolean oo) {
   }    
 }
 
+void service_flow_pin() {
+  flow_count += 1;
+}
+
 void setup() {
   Serial.begin(9600);
   pinMode(pump_pin, OUTPUT);
   pinMode(heater_pin, OUTPUT);
   pinMode(solenoid_pin, OUTPUT);  
+  pinMode(wtr_rqst_pin, INPUT);
   pinMode(flow_pin, INPUT);
   digitalWrite(solenoid_pin, LOW);
-
+  attachInterrupt(0, service_flow_pin, RISING);
   tft.begin();
   ctp.begin(40);
   // read diagnostics (optional but can help debug problems)
@@ -112,6 +122,7 @@ void setup() {
   tft.println(String(temp1_int)+"."+String(temp1_rmndr)+"F");
   temp_update_time = millis()+temp_update_millis;
   sol_update_time = millis()+sol_update_millis;
+  flow_update_time = millis()+flow_update_millis;
   
   // Clear the serial buffer
   char message[61];
@@ -227,8 +238,15 @@ void loop(void) {
     temp_update_time = millis()+temp_update_millis;  
   }
 
-  if (millis() > temp_update_time) {
-    if (digitalRead(flow_pin)) {
+  if (millis() > flow_update_time) {
+    tft.fillRect(60,160,140,40,ILI9341_BLACK);
+    tft.setCursor(60, 160);
+    tft.println(flow_count/10);
+    flow_update_time = millis()+flow_update_millis;  
+  }
+
+  if (millis() > sol_update_time) {
+    if (digitalRead(wtr_rqst_pin)) {
       digitalWrite(solenoid_pin, HIGH);
     }
     else {
