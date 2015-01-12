@@ -15,7 +15,7 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
 Adafruit_FT6206 ctp = Adafruit_FT6206();
 unsigned int heater_cycle_millis = 1200;
 unsigned int pump_cycle_millis = 5000;
-unsigned int temp_update_millis = 10000;
+unsigned int temp_update_millis = 1000;
 unsigned int sol_update_millis = 100;
 unsigned int flow_update_millis = 2000;
 
@@ -71,6 +71,8 @@ void setup() {
   pinMode(heater_pin, OUTPUT);
   pinMode(solenoid_pin, OUTPUT);  
   pinMode(wtr_rqst_pin, INPUT);
+  digitalWrite(wtr_rqst_pin, HIGH);
+  
   pinMode(flow_pin, INPUT);
   digitalWrite(solenoid_pin, LOW);
   attachInterrupt(0, service_flow_pin, RISING);
@@ -235,6 +237,8 @@ void loop(void) {
     tft.fillRect(60,200,140,40,ILI9341_BLACK);
     tft.setCursor(60, 200);
     tft.println(String(temp1_int)+"."+String(temp1_rmndr)+"F");
+    //pinMode(A1, INPUT);
+    //tft.println(analogRead(A1));
     temp_update_time = millis()+temp_update_millis;  
   }
 
@@ -246,7 +250,7 @@ void loop(void) {
   }
 
   if (millis() > sol_update_time) {
-    if (digitalRead(wtr_rqst_pin)) {
+    if (digitalRead(wtr_rqst_pin) == LOW) {
       digitalWrite(solenoid_pin, HIGH);
     }
     else {
