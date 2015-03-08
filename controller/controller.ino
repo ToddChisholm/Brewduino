@@ -13,35 +13,59 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
 // If using the breakout, change pins as desired
 //Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
 Adafruit_FT6206 ctp = Adafruit_FT6206();
-unsigned int heater_cycle_millis = 1200;
 unsigned int pump_cycle_millis = 5000;
-unsigned int temp_update_millis = 1000;
 unsigned int sol_update_millis = 100;
 unsigned int flow_update_millis = 2000;
 
 unsigned int pump_percent = 0;
-unsigned int heater_percent = 0;
 boolean pump_on = false;
-boolean heater_on = false;
 unsigned long pump_transition_time = 0;
-unsigned long heater_transition_time = 0;
-unsigned long temp_update_time = 0;
 unsigned long sol_update_time = 0;
 unsigned long flow_update_time = 0;
 
-unsigned int temp1_int = 0;
-unsigned int temp1_rmndr = 0;
 volatile unsigned long int flow_count = 0;
 
 int pump_pin = 7;
-int heater_pin = 6;
 int solenoid_pin = 4;
 int wtr_rqst_pin = 3;
-int temp_pin = 0;
 int flow_pin = 2;
 
 int message_bytes[4];
 int message_ptr = 0;
+
+struct float_data {
+  // To convert to float, (int_part - 100) + dec_part*10
+  byte int_part;
+  byte dec_part;
+};
+
+float_data temp1 = {0+100, 0};
+float_data temp2 = {0+100, 0};
+float_data heater1_percent = {0+100,0};
+
+byte strt_mark = 255;
+
+float float_data_to_float(struct float_data fd) {
+  return float(fd.int_part)-100. + float(fd.dec_part)/10.;
+}
+
+float_data float_to_float_data(float f) {
+  float_data fd;
+  fd.int_part = byte(f+100.);
+  fd.dec_part = byte((f+100.-float(fd.int_part))*10.);
+  return fd;
+}
+
+void send_heater1_percent(float percent) {
+  // Also sets the current heater1_percent
+  heater1_percent = float_to_float_data(percent);
+  Serial1.write(strt_mark);
+  // Temperature 1 percentage
+  byte heater1_percent_mark = 2;
+  Serial1.write(heater1_percent_mark);
+  Serial1.write(heater1_percent.int_part);
+  Serial1.write(heater1_percent.dec_part);
+}
 
 void change_pump(boolean oo) {
   if (oo) {
@@ -52,23 +76,30 @@ void change_pump(boolean oo) {
   }    
 }
 
-void change_heater(boolean oo) {
-  if (oo) {
-    digitalWrite(heater_pin, HIGH);  
-  }
-  else {
-    digitalWrite(heater_pin, LOW);  
-  }    
-}
-
 void service_flow_pin() {
   flow_count += 1;
 }
 
+void display_temp1() {
+  tft.fillRect(60,200,100,40,ILI9341_BLACK);
+  tft.setCursor(60, 200);
+  tft.println(String(int(temp1.int_part)-100)+"."+String(temp1.dec_part)+"C");
+}
+void display_temp2() {
+  //tft.fillRect(60,200,100,40,ILI9341_BLACK);
+  //tft.setCursor(60, 200);
+  //tft.println(String(int(temp1.int_part)-100)+"."+String(temp1.dec_part)+"C");
+}
+
+void display_heater1() {
+  tft.fillRect(25,140,100,40,ILI9341_BLACK);
+  tft.setCursor(25, 140);
+  tft.println(String(int(heater1_percent.int_part)-100)+"."+String(heater1_percent.dec_part));
+}
+
 void setup() {
-  Serial.begin(9600);
+  Serial1.begin(9600);
   pinMode(pump_pin, OUTPUT);
-  pinMode(heater_pin, OUTPUT);
   pinMode(solenoid_pin, OUTPUT);  
   pinMode(wtr_rqst_pin, INPUT);
   digitalWrite(wtr_rqst_pin, HIGH);
@@ -79,11 +110,11 @@ void setup() {
   tft.begin();
   ctp.begin(40);
   // read diagnostics (optional but can help debug problems)
-  uint8_t x = tft.readcommand8(ILI9341_RDMODE);
-  x = tft.readcommand8(ILI9341_RDMADCTL);
-  x = tft.readcommand8(ILI9341_RDPIXFMT);
-  x = tft.readcommand8(ILI9341_RDIMGFMT);
-  x = tft.readcommand8(ILI9341_RDSELFDIAG);
+  //uint8_t x = tft.readcommand8(ILI9341_RDMODE);
+  //x = tft.readcommand8(ILI9341_RDMADCTL);
+  //x = tft.readcommand8(ILI9341_RDPIXFMT);
+  //x = tft.readcommand8(ILI9341_RDIMGFMT);
+  //x = tft.readcommand8(ILI9341_RDSELFDIAG);
 
   tft.fillScreen(ILI9341_BLACK);
   //unsigned long start = micros();
@@ -117,19 +148,16 @@ void setup() {
   tft.setCursor(220, 200);
   tft.println("100%");
 
-  //float temp=calc_temp();
-  //int temp_1 = temp;
-  //int temp_2 = int((temp-float(temp_1))*10.);
-  tft.setCursor(60, 200);
-  tft.println(String(temp1_int)+"."+String(temp1_rmndr)+"F");
-  temp_update_time = millis()+temp_update_millis;
+  display_temp1();
+  display_temp2();
+
   sol_update_time = millis()+sol_update_millis;
   flow_update_time = millis()+flow_update_millis;
   
   // Clear the serial buffer
   char message[61];
-  Serial.readBytes(message, 61);
-  
+  Serial1.readBytes(message, 61);
+
   return;
 }
 
@@ -149,30 +177,22 @@ void loop(void) {
     if (xx <= 30 && yy >= 40) {
       tft.fillRect(25,140,100,40,ILI9341_BLACK);
       tft.setCursor(25, 140);
-      heater_percent = 100-((yy-40)/2);
-      tft.println(String(heater_percent)+"%");
-      heater_on = false;  
-      heater_transition_time = millis()+int(float(heater_cycle_millis)*(1.-float(heater_percent)/100.));
-      change_heater(heater_on);      
+      float heater_percent_f = 100-((yy-40)/2);
+      send_heater1_percent(heater_percent_f);
+      display_heater1();
     }
     // Heater On/Off
     else if (xx >= 35 && xx <=135 && yy >= 40 && yy <=120) {
       tft.fillRect(25,140,100,40,ILI9341_BLACK);
-      if (yy >= 80) {
-        heater_percent = 100;
-        heater_on = true;  
-        //heater_transition_time = millis()+int(float(heater_cycle_millis)*(1.-float(heater_percent)/100.));
-        change_heater(heater_on);
-      }
-      else {
-        heater_percent = 0;
-        heater_on = false;  
-        //heater_transition_time = millis()+int(float(heater_cycle_millis)*(1.-float(heater_percent)/100.));
-        change_heater(heater_on);
-      }
       tft.fillRect(25,140,80,40,ILI9341_BLACK);
       tft.setCursor(25, 140);
-      tft.println(String(heater_percent)+"%");
+      if (yy >= 80) {
+        send_heater1_percent(100.0);
+      }
+      else {
+        send_heater1_percent(0.0);
+      }
+      display_heater1();
     }
     // Pump change
     else if (xx>=220 && yy>=40) {
@@ -216,31 +236,6 @@ void loop(void) {
       }
     }
   }
-  if (heater_percent != 0 && heater_percent != 100) {
-    if (millis() > heater_transition_time) {
-      if (heater_on) {
-        heater_on = false;
-        change_heater(heater_on);
-        heater_transition_time = millis()+int(float(heater_cycle_millis)*(1.-float(heater_percent)/100.));
-      }
-      else {
-        heater_on = true;
-        change_heater(heater_on);
-        heater_transition_time = millis()+int(float(heater_cycle_millis)*float(heater_percent)/100.);
-      }
-    }
-  }
-  if (millis() > temp_update_time) {
-    //float temp=calc_temp();
-    //int temp_1 = temp;
-    //int temp_2 = int((temp-float(temp_1))*10.);
-    tft.fillRect(60,200,140,40,ILI9341_BLACK);
-    tft.setCursor(60, 200);
-    tft.println(String(temp1_int)+"."+String(temp1_rmndr)+"F");
-    //pinMode(A1, INPUT);
-    //tft.println(analogRead(A1));
-    temp_update_time = millis()+temp_update_millis;  
-  }
 
   if (millis() > flow_update_time) {
     tft.fillRect(60,160,140,40,ILI9341_BLACK);
@@ -259,30 +254,47 @@ void loop(void) {
     sol_update_time = millis()+sol_update_millis;  
   }
 
-  while (Serial.available() > 0) {
-    if (message_ptr == 0 && Serial.read() == 255) {
+  // Handle input from the trinket
+  while (Serial1.available() > 0) {
+    if (message_ptr == 0 && Serial1.read() == 255) {
       message_bytes[message_ptr] = 255;
       message_ptr += 1;
     }
     else if (message_ptr == 3) {
-      message_bytes[message_ptr] = Serial.read();
+      message_bytes[message_ptr] = Serial1.read();
       message_ptr += 1;
       // Handle the messages here
+
       if (message_bytes[1] == 5) {
-        //Temperature 1
-        temp1_int = message_bytes[2];
-        temp1_rmndr = message_bytes[3];
+        // Receive temperature 1
+	if (message_bytes[2] != temp1.int_part && message_bytes[3] != temp1.dec_part) {
+	  temp1.int_part = message_bytes[2];
+	  temp1.dec_part = message_bytes[3];
+	  display_temp1();
+	}
+      }
+      else if (message_bytes[1] == 6) {
+        // Receive heater1 percentage
+	if (message_bytes[2] != heater1_percent.int_part && message_bytes[3] != heater1_percent.dec_part) {
+	  heater1_percent.int_part = message_bytes[2];
+	  heater1_percent.dec_part = message_bytes[3];
+	  display_heater1();
+	}
+      }
+      if (message_bytes[1] == 7) {
+        // Receive temperature 2
+	if (message_bytes[2] != temp2.int_part && message_bytes[3] != temp2.dec_part) {
+	  temp2.int_part = message_bytes[2];
+	  temp2.dec_part = message_bytes[3];
+	  display_temp2();
+	}
       }
       // Clear message_bytes
       message_ptr = 0;
     }    
     else {
-      message_bytes[message_ptr] = Serial.read();
+      message_bytes[message_ptr] = Serial1.read();
       message_ptr += 1;
     }
   }
-
-  
-
 }
-
