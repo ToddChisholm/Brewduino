@@ -32,7 +32,7 @@ int flow_pin = 2;
 
 int message_bytes[4];
 int message_ptr = 0;
-
+char itoabuf[6];
 struct float_data {
   // To convert to float, (int_part - 100) + dec_part*10
   byte int_part;
@@ -99,6 +99,8 @@ void display_heater1() {
 
 void setup() {
   Serial1.begin(9600);
+  Serial.begin(9600);
+
   pinMode(pump_pin, OUTPUT);
   pinMode(solenoid_pin, OUTPUT);  
   pinMode(wtr_rqst_pin, INPUT);
@@ -238,9 +240,9 @@ void loop(void) {
   }
 
   if (millis() > flow_update_time) {
-    tft.fillRect(60,160,140,40,ILI9341_BLACK);
-    tft.setCursor(60, 160);
-    tft.println(flow_count/10);
+    //tft.fillRect(60,160,140,40,ILI9341_BLACK);
+    //tft.setCursor(60, 160);
+    //tft.println(flow_count/10);
     flow_update_time = millis()+flow_update_millis;  
   }
 
@@ -262,10 +264,11 @@ void loop(void) {
     }
     else if (message_ptr == 3) {
       message_bytes[message_ptr] = Serial1.read();
+      itoa(message_bytes[1], itoabuf, 10);
       message_ptr += 1;
       // Handle the messages here
 
-      if (message_bytes[1] == 5) {
+      if (message_bytes[1] == 0x05) {
         // Receive temperature 1
 	if (message_bytes[2] != temp1.int_part && message_bytes[3] != temp1.dec_part) {
 	  temp1.int_part = message_bytes[2];
@@ -273,7 +276,7 @@ void loop(void) {
 	  display_temp1();
 	}
       }
-      else if (message_bytes[1] == 6) {
+      else if (message_bytes[1] == 0x06) {
         // Receive heater1 percentage
 	if (message_bytes[2] != heater1_percent.int_part && message_bytes[3] != heater1_percent.dec_part) {
 	  heater1_percent.int_part = message_bytes[2];
@@ -281,13 +284,16 @@ void loop(void) {
 	  display_heater1();
 	}
       }
-      if (message_bytes[1] == 7) {
+      else if (message_bytes[1] == 0x07) {
         // Receive temperature 2
 	if (message_bytes[2] != temp2.int_part && message_bytes[3] != temp2.dec_part) {
 	  temp2.int_part = message_bytes[2];
 	  temp2.dec_part = message_bytes[3];
 	  display_temp2();
 	}
+      }
+      else {
+         Serial.println("Unhandled");
       }
       // Clear message_bytes
       message_ptr = 0;

@@ -77,7 +77,13 @@ const int CS1_PIN = 10;
 PWFusion_MAX31865_RTD rtd_ch0(CS0_PIN);
 PWFusion_MAX31865_RTD rtd_ch1(CS1_PIN);
 
-float float_data_to_float(float_data fd) {
+struct float_data {
+  // To convert to float, (int_part - 100) + dec_part*10
+  byte int_part;
+  byte dec_part;
+};
+
+float float_data_to_float(struct float_data fd) {
   return float(fd.int_part)-100. + float(fd.dec_part)/10.;
 }
 
@@ -87,13 +93,6 @@ float_data float_to_float_data(float f) {
   fd.dec_part = byte((f+100.-float(fd.int_part))*10.);
   return fd;
 }
-
-struct float_data {
-  // To convert to float, (int_part - 100) + dec_part*10
-  byte int_part;
-  byte dec_part;
-};
-
 
 unsigned int heater_cycle_millis = 1200;
 float_data heater1_percent = {0+100, 0};
@@ -167,6 +166,19 @@ void loop() {
 
     static struct var_max31865 RTD_CH0;
     static struct var_max31865 RTD_CH1;
+
+    RTD_CH0.RTD_type = 1;                         // un-comment for PT100 RTD
+  //   RTD_CH0.RTD_type = 2;                        // un-comment for PT1000 RTD
+    RTD_CH1.RTD_type = 1;                         // un-comment for PT100 RTD
+  // RTD_CH0.RTD_type = 2;                        // un-comment for PT1000 RTD
+  
+  struct var_max31865 *rtd_ptr;
+  rtd_ptr = &RTD_CH0;
+  rtd_ch0.MAX31865_full_read(rtd_ptr);          // Update MAX31855 readings 
+  
+  rtd_ptr = &RTD_CH1;
+  rtd_ch1.MAX31865_full_read(rtd_ptr);          // Update MAX31855 readings 
+
     double temp1_f;
     if(0 == RTD_CH0.status)                       // no fault, print info to serial port
     {
@@ -206,7 +218,6 @@ void loop() {
       }
     }  // end of fault handling
     temp1 = float_to_float_data(temp1_f);
-
     Serial.write(strt_mark);
     // Temperature 1
     byte temp1_mark = 5;
