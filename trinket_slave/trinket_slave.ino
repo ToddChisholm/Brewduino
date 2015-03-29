@@ -101,6 +101,12 @@ unsigned long heater1_transition_time = 0;
 int heater1_pin = A5;
 bool heater1_pid_mode = false;
 
+float_data heater2_percent = {0+100, 0};
+boolean heater2_on = false;
+unsigned long heater2_transition_time = 0;
+int heater2_pin = A4;
+bool heater2_pid_mode = false;
+
 float_data temp1;
 float_data temp2;
 
@@ -121,9 +127,19 @@ void change_heater1(boolean oo) {
   }    
 }
 
+void change_heater2(boolean oo) {
+  if (oo) {
+    digitalWrite(heater2_pin, HIGH);  
+  }
+  else {
+    digitalWrite(heater2_pin, LOW);  
+  }    
+}
+
 void setup() {
   Serial.begin(9600);
   pinMode(heater1_pin, OUTPUT);
+  pinMode(heater2_pin, OUTPUT);
   temp_update_time = millis()+temp_update_millis;
 
   // setup for the the SPI library:
@@ -160,6 +176,22 @@ void loop() {
       }
     }
   }
+
+  if ((heater2_percent.int_part-100 != 0 || heater2_percent.dec_part != 0 ) && heater2_percent.int_part-100 != 100) {
+    if (millis() > heater2_transition_time) {
+      if (heater2_on) {
+        heater2_on = false;
+        change_heater2(heater2_on);
+        heater2_transition_time = millis()+int(float(heater_cycle_millis)*(1.-float_data_to_float(heater2_percent)/100.));
+      }
+      else {
+        heater2_on = true;
+        change_heater2(heater2_on);
+        heater2_transition_time = millis()+int(float(heater_cycle_millis)*float_data_to_float(heater2_percent)/100.);
+      }
+    }
+  }
+
   if (millis() > temp_update_time) {
 
     temp_update_time = millis()+temp_update_millis;  
@@ -278,6 +310,13 @@ void loop() {
     Serial.write(temp2_mark);
     Serial.write(temp2.int_part);
     Serial.write(temp2.dec_part);
+
+    Serial.write(strt_mark);
+    // Percent 2
+    byte percent2_mark = 8;
+    Serial.write(percent2_mark);
+    Serial.write(heater2_percent.int_part);
+    Serial.write(heater2_percent.dec_part);
   }
 
   while (Serial.available() > 0) {
@@ -291,6 +330,12 @@ void loop() {
       // Handle the messages here
       if (message_bytes[1] == 2) {
 	// Set heater1 percentage
+	// Make sure heater 1 is off
+	heater2_on = false;
+	heater2_percent.int_part = 100;
+	heater2_percent.dec_part = 0;
+	change_heater2(heater2_on);
+	heater2_pid_mode = false;
         heater1_percent.int_part = message_bytes[2];
         heater1_percent.dec_part = message_bytes[3];
 	if (heater1_percent.int_part-100 == 0 and heater1_percent.dec_part==0) {
@@ -307,6 +352,37 @@ void loop() {
       // Clear message_bytes
       message_ptr = 0;
     }    
+
+    else if (message_ptr == 3) {
+      message_bytes[message_ptr] = Serial.read();
+      message_ptr += 1;
+      // Handle the messages here
+      if (message_bytes[1] == 4) {
+	// Set heater2 percentage
+	// Make sure heater 1 is off
+	heater1_on = false;
+	heater1_percent.int_part = 100;
+	heater2_percent.dec_part = 0;
+	change_heater1(heater1_on);
+	heater1_pid_mode = false;
+
+        heater2_percent.int_part = message_bytes[2];
+        heater2_percent.dec_part = message_bytes[3];
+	if (heater2_percent.int_part-100 == 0 and heater2_percent.dec_part==0) {
+	  heater2_on = false;
+	  change_heater2(heater2_on);
+	}
+	else if (heater2_percent.int_part-100 >= 100) {
+	  heater2_percent.int_part = 100+100;
+	  heater2_percent.dec_part = 0;
+	  heater2_on = true;
+	  change_heater2(heater2_on);
+	}
+      }
+      // Clear message_bytes
+      message_ptr = 0;
+    }    
+
     else {
       message_bytes[message_ptr] = Serial.read();
       message_ptr += 1;
