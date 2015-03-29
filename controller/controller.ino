@@ -130,8 +130,8 @@ void display_heater2() {
     tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part));
   }
 }
-void display_water_count() {
-  if ( menu==ADDWATER && prev_flow_count != flow_count) {
+void display_water_count(bool force) {
+  if ( force || (menu==ADDWATER && prev_flow_count != flow_count) ) {
     tft.fillRect(110,150,125,40,ILI9341_BLACK);
     tft.setCursor(110, 150);
     float gallons = float(flow_count)*flow_factor;
@@ -149,7 +149,7 @@ void prepare_top_menu() {
   tft.setCursor(0, 0);
   tft.println("BOIL");  
   tft.setCursor(0, 45);
-  tft.println("PUMP TO MASH");  
+  tft.println("PUMP TO BOIL");  
   tft.setCursor(0, 90);
   tft.println("MASH");  
   tft.setCursor(0, 135);
@@ -265,10 +265,10 @@ void prepare_addwater_menu() {
   tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
   tft.println("MENU");
   tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
-  tft.setCursor(0, 0);
+  tft.setCursor(0, 100);
   tft.setTextColor(ILI9341_BLUE);
   tft.println("RESET");
-  display_water_count();
+  display_water_count(true);
 }
 
 void clear_all() {
@@ -426,6 +426,10 @@ void loop(void) {
 	  clear_all();
 	  menu = MASH;
 	  prepare_mash_menu();
+	  // pump 100%
+	  pump_percent = 100;
+	  pump_on = true;  
+	  change_pump(pump_on);
 	}
 	else if ( xx <=160 && yy >= 135 && yy <180) {
 	  // Pump out
@@ -459,9 +463,9 @@ void loop(void) {
 	break;
       case ADDWATER:
 	check_menu_touch(xx,yy);
-	if (xx<=125 && yy<=40) {
+	if (xx<=125 && yy >= 100 && yy<=140) {
 	  flow_count = 0;
-	  display_water_count();
+	  display_water_count(true);
 	}
 	break;
       }
@@ -485,7 +489,7 @@ void loop(void) {
 
   // Flow display update
   if (millis() > flow_update_time) {
-    display_water_count();
+    display_water_count(false);
     flow_update_time = millis()+flow_update_millis;  
   }
 
