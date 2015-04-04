@@ -108,6 +108,7 @@ int heater2_pin = A4;
 bool heater2_pid_mode = false;
 
 float_data temp1;
+
 float_data temp2;
 
 unsigned int temp_update_millis = 1000;
@@ -349,15 +350,7 @@ void loop() {
 	  change_heater1(heater1_on);
 	}
       }
-      // Clear message_bytes
-      message_ptr = 0;
-    }    
-
-    else if (message_ptr == 3) {
-      message_bytes[message_ptr] = Serial.read();
-      message_ptr += 1;
-      // Handle the messages here
-      if (message_bytes[1] == 4) {
+      else if (message_bytes[1] == 4) {
 	// Set heater2 percentage
 	// Make sure heater 1 is off
 	heater1_on = false;
