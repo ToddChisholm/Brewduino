@@ -65,6 +65,8 @@
 
 // the sensor communicates using SPI, so include the hardware SPI library:
 #include <SPI.h>
+#include <PID_v1.h>
+
 // include Playing With Fusion MAX31865 libraries
 #include <PlayingWithFusion_MAX31865.h>              // core library
 #include <PlayingWithFusion_MAX31865_STRUCT.h>       // struct library
@@ -87,6 +89,10 @@ float float_data_to_float(struct float_data fd) {
   return float(fd.int_part)-100. + float(fd.dec_part)/10.;
 }
 
+float float_data_to_float(int int_part, int dec_part) {
+  return float(int_part)-100. + float(dec_part)/10.;
+}
+
 float_data float_to_float_data(float f) {
   float_data fd;
   fd.int_part = byte(f+100.);
@@ -100,16 +106,22 @@ boolean heater1_on = false;
 unsigned long heater1_transition_time = 0;
 int heater1_pin = A5;
 bool heater1_pid_mode = false;
+double heater1_target_temp = 0.0;
 
 float_data heater2_percent = {0+100, 0};
 boolean heater2_on = false;
 unsigned long heater2_transition_time = 0;
 int heater2_pin = A4;
 bool heater2_pid_mode = false;
+double heater2_target_temp = 0.0;
+
 
 float_data temp1;
-
 float_data temp2;
+double pid1_temp;
+double pid1_output;
+double pid2_temp;
+double pid2_output;
 
 unsigned int temp_update_millis = 1000;
 unsigned long temp_update_time = 0;
@@ -118,6 +130,9 @@ byte strt_mark = 255;
 
 int message_bytes[4];
 int message_ptr = 0;
+
+PID pid1(&pid1_temp, &pid1_output, &heater1_target_temp, 100./5., 1./6., 0.0, DIRECT);
+PID pid2(&pid2_temp, &pid2_output, &heater2_target_temp, 30./5.,  1./6., 0.0, DIRECT);
 
 void change_heater1(boolean oo) {
   if (oo) {
@@ -154,6 +169,16 @@ void setup() {
   rtd_ch0.MAX31865_config();
   rtd_ch1.MAX31865_config();
 
+  pid1.SetMode(MANUAL);
+  pid2.SetMode(MANUAL);
+  pid1.SetSampleTime(temp_update_millis-1);
+  pid2.SetSampleTime(temp_update_millis-1);
+  // PID 1 controls the boil element
+  pid1.SetOutputLimits(0, 100);
+
+  // PID 2 controls the RIMS element
+  pid2.SetOutputLimits(0, 30);
+ 
   // Clear the serial buffer
   char message[61];
   Serial.readBytes(message, 61);
@@ -318,6 +343,19 @@ void loop() {
     Serial.write(percent2_mark);
     Serial.write(heater2_percent.int_part);
     Serial.write(heater2_percent.dec_part);
+
+    // PID handling
+    //PID pid1(&pid1_temp, &pid1_output, &heater1_target_temp, 2,5,1, DIRECT); 
+    if (heater1_pid_mode) {
+      pid1_temp = temp1_f;
+      pid1.Compute();
+      heater1_percent = float_to_float_data(pid1_output);
+    }
+    else if (heater2_pid_mode) {
+      pid2_temp = temp2_f;
+      pid2.Compute();
+      heater2_percent = float_to_float_data(pid2_output);
+    }
   }
 
   while (Serial.available() > 0) {
@@ -329,7 +367,26 @@ void loop() {
       message_bytes[message_ptr] = Serial.read();
       message_ptr += 1;
       // Handle the messages here
-      if (message_bytes[1] == 2) {
+      if (message_bytes[1] == 1) {
+	// Set heater1 PID temperature
+	// Make sure heater 2 is off
+	heater2_on = false;
+	heater2_percent.int_part = 100;
+	heater2_percent.dec_part = 0;
+	change_heater2(heater2_on);
+	heater2_pid_mode = false;
+	pid2.SetMode(MANUAL);
+
+	heater1_target_temp = float_data_to_float(message_bytes[2], message_bytes[3]);
+	heater1_pid_mode = true;
+	pid2.SetMode(AUTOMATIC);
+	heater1_percent.int_part = 100;
+	heater1_percent.dec_part = 0;
+	heater1_on = false;
+	change_heater1(heater1_on);
+
+      }
+      else if (message_bytes[1] == 2) {
 	// Set heater1 percentage
 	// Make sure heater 1 is off
 	heater2_on = false;
@@ -337,6 +394,9 @@ void loop() {
 	heater2_percent.dec_part = 0;
 	change_heater2(heater2_on);
 	heater2_pid_mode = false;
+	heater1_pid_mode = false;
+	pid1.SetMode(MANUAL);
+	pid2.SetMode(MANUAL);
         heater1_percent.int_part = message_bytes[2];
         heater1_percent.dec_part = message_bytes[3];
 	if (heater1_percent.int_part-100 == 0 and heater1_percent.dec_part==0) {
@@ -350,6 +410,25 @@ void loop() {
 	  change_heater1(heater1_on);
 	}
       }
+      else if (message_bytes[1] == 3) {
+	// Set heater2 PID temperature
+	// Make sure heater 1 is off
+	heater1_on = false;
+	heater1_percent.int_part = 100;
+	heater1_percent.dec_part = 0;
+	change_heater1(heater1_on);
+	heater1_pid_mode = false;
+	pid1.SetMode(MANUAL);
+
+	heater2_target_temp = float_data_to_float(message_bytes[2], message_bytes[3]);
+	heater2_pid_mode = true;
+	pid2.SetMode(AUTOMATIC);
+	
+	heater2_percent.int_part = 100;
+	heater2_percent.dec_part = 0;
+	heater2_on = false;
+	change_heater2(heater2_on);
+      }
       else if (message_bytes[1] == 4) {
 	// Set heater2 percentage
 	// Make sure heater 1 is off
@@ -358,7 +437,9 @@ void loop() {
 	heater2_percent.dec_part = 0;
 	change_heater1(heater1_on);
 	heater1_pid_mode = false;
-
+	heater2_pid_mode = false;
+	pid1.SetMode(MANUAL);
+	pid2.SetMode(MANUAL);
         heater2_percent.int_part = message_bytes[2];
         heater2_percent.dec_part = message_bytes[3];
 	if (heater2_percent.int_part-100 == 0 and heater2_percent.dec_part==0) {

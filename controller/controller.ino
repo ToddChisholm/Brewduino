@@ -47,6 +47,8 @@ float_data temp1 = {0+100, 0};
 float_data temp2 = {0+100, 0};
 float_data heater1_percent = {0+100,0};
 float_data heater2_percent = {0+100,0};
+float heater1_target = 0.;
+float heater2_target = 0.;
 
 enum MenuPages { TOP, BOIL, PUMPACROSS, MASH, PUMPOUT, ADDWATER};
 
@@ -87,6 +89,26 @@ void send_heater2_percent(float percent) {
   Serial1.write(heater2_percent.dec_part);
 }
 
+void send_heater1_temp(float temp) {
+  float_data heater1_temp = float_to_float_data(temp);
+  Serial1.write(strt_mark);
+  // Temperature 2 percentage
+  byte heater1_pid_temp_mark = 1;
+  Serial1.write(heater1_pid_temp_mark);
+  Serial1.write(heater1_temp.int_part);
+  Serial1.write(heater1_temp.dec_part);
+}
+ 
+void send_heater2_temp(float temp) {
+  float_data heater2_temp = float_to_float_data(temp);
+  Serial1.write(strt_mark);
+  // Temperature 2 percentage
+  byte heater2_pid_temp_mark = 3;
+  Serial1.write(heater2_pid_temp_mark);
+  Serial1.write(heater2_temp.int_part);
+  Serial1.write(heater2_temp.dec_part);
+}
+
 void change_pump(boolean oo) {
   if (oo) {
     digitalWrite(pump_pin, HIGH);  
@@ -118,16 +140,32 @@ void display_temp2() {
 
 void display_heater1() {
   if (menu == BOIL) {
-    tft.fillRect(25,140,120,40,ILI9341_BLACK);
-    tft.setCursor(25, 140);
+    tft.fillRect(25,120,120,40,ILI9341_BLACK);
+    tft.setCursor(25, 120);
     tft.println(String(int(heater1_percent.int_part)-100)+"."+String(heater1_percent.dec_part));
   }
 }
 void display_heater2() {
   if (menu == PUMPACROSS || menu == MASH) {
-    tft.fillRect(25,140,120,40,ILI9341_BLACK);
-    tft.setCursor(25, 140);
+    tft.fillRect(25,120,120,40,ILI9341_BLACK);
+    tft.setCursor(25, 120);
     tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part));
+  }
+}
+void display_heater1_target() {
+  if (menu == BOIL) {
+    float_data heater1_target_fd = float_to_float_data(heater1_target);
+    tft.fillRect(25,160,120,40,ILI9341_BLACK);
+    tft.setCursor(25, 160);
+    tft.println(String(int(heater1_target_fd.int_part)-100)+"."+String(heater1_target_fd.dec_part));
+  }
+}
+void display_heater2_target() {
+  if (menu == PUMPACROSS || menu == MASH) {
+    float_data heater2_target_fd = float_to_float_data(heater2_target);
+    tft.fillRect(25,160,120,40,ILI9341_BLACK);
+    tft.setCursor(25, 160);
+    tft.println(String(int(heater2_target_fd.int_part)-100)+"."+String(heater2_target_fd.dec_part));
   }
 }
 void display_water_count(bool force) {
@@ -313,19 +351,31 @@ void check_pump_touch(int xx, int yy) {
   }
 }
 
-void check_heater_touch(int xx, int yy, int heater_num, int heater_range) 
+void check_heater_touch(int xx, int yy, int heater_num, int heater_range, float heater_offset, bool pid) 
 {
   // Heater slider
   if (xx <= 30 && yy >= 40) {
     tft.fillRect(25,140,100,40,ILI9341_BLACK);
     tft.setCursor(25, 140);
-    float heater_percent_f = float(100-((yy-40)/2))/100.*heater_range;
+    float heater_set_f = float(100-((yy-40)/2))/100.*heater_range+heater_offset;
     if (heater_num == 1) {
-      send_heater1_percent(heater_percent_f);
+      if (pid) {
+	send_heater1_temp(heater_set_f);
+	display_heater1_target();
+      }
+      else {
+	send_heater1_percent(heater_set_f);
+      }
       display_heater1();
     }
     else {
-      send_heater2_percent(heater_percent_f);
+      if (pid) {
+	send_heater2_temp(heater_set_f);
+	display_heater2_target();
+      }
+      else {
+	send_heater2_percent(heater_set_f);
+      }
       display_heater2();
     }
   }
@@ -445,21 +495,21 @@ void loop(void) {
 	}
 	break;
       case BOIL:
-	check_heater_touch(xx, yy, 1, 100);
+	check_heater_touch(xx, yy, 1, 100, 0., false);
 	check_menu_touch(xx,yy);
 	break;
       case PUMPACROSS:
-	check_heater_touch(xx, yy, 2, 100);
+	check_heater_touch(xx, yy, 2, 100, 0., false);
 	check_pump_touch(xx, yy);
 	check_menu_touch(xx,yy);
 	break;
       case MASH:
-	check_heater_touch(xx, yy, 2, 25);
+	check_heater_touch(xx, yy, 2, 80., 100., true);
 	check_menu_touch(xx,yy);
 	break;
       case PUMPOUT:
 	check_pump_touch(xx, yy);
-	check_menu_touch(xx,yy);
+	check_menu_touch(xx, yy);
 	break;
       case ADDWATER:
 	check_menu_touch(xx,yy);
