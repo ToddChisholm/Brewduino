@@ -149,7 +149,7 @@ void display_heater2() {
   if (menu == PUMPACROSS || menu == MASH) {
     tft.fillRect(25,120,120,40,ILI9341_BLACK);
     tft.setCursor(25, 120);
-    tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part));
+    tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part)+"%");
   }
 }
 void display_heater1_target() {
@@ -157,7 +157,7 @@ void display_heater1_target() {
     float_data heater1_target_fd = float_to_float_data(heater1_target);
     tft.fillRect(25,160,120,40,ILI9341_BLACK);
     tft.setCursor(25, 160);
-    tft.println(String(int(heater1_target_fd.int_part)-100)+"."+String(heater1_target_fd.dec_part));
+    tft.println(String(int(heater1_target_fd.int_part)-100)+"."+String(heater1_target_fd.dec_part)+"C");
   }
 }
 void display_heater2_target() {
@@ -165,7 +165,7 @@ void display_heater2_target() {
     float_data heater2_target_fd = float_to_float_data(heater2_target);
     tft.fillRect(25,160,120,40,ILI9341_BLACK);
     tft.setCursor(25, 160);
-    tft.println(String(int(heater2_target_fd.int_part)-100)+"."+String(heater2_target_fd.dec_part));
+    tft.println(String(int(heater2_target_fd.int_part)-100)+"."+String(heater2_target_fd.dec_part)+"C");
   }
 }
 void display_water_count(bool force) {
@@ -206,7 +206,7 @@ void prepare_boil_menu() {
   tft.println("HEAT");
   tft.setTextColor(ILI9341_WHITE);
   tft.drawRect(0,40,20,200,ILI9341_RED);
-  tft.setCursor(25, 140);
+  tft.setCursor(25, 120);
   tft.println("0%");
   tft.setCursor(35, 40);
   tft.println("OFF");  
@@ -226,7 +226,7 @@ void prepare_pumpacross_menu() {
   tft.println("HEAT");
   tft.setTextColor(ILI9341_WHITE);
   tft.drawRect(0,40,20,200,ILI9341_RED);
-  tft.setCursor(25, 140);
+  tft.setCursor(25, 120);
   tft.println("0%");
   tft.setCursor(35, 40);
   tft.println("OFF");  
@@ -263,7 +263,7 @@ void prepare_mash_menu() {
   tft.println("HEAT");
   tft.setTextColor(ILI9341_WHITE);
   tft.drawRect(0,40,20,200,ILI9341_RED);
-  tft.setCursor(25, 140);
+  tft.setCursor(25, 120);
   tft.println("0%");
   tft.setCursor(35, 40);
   tft.println("OFF");  
@@ -357,10 +357,11 @@ void check_heater_touch(int xx, int yy, int heater_num, int heater_range, float 
   if (xx <= 30 && yy >= 40) {
     tft.fillRect(25,140,100,40,ILI9341_BLACK);
     tft.setCursor(25, 140);
-    float heater_set_f = float(100-((yy-40)/2))/100.*heater_range+heater_offset;
+    float heater_set_f = float(100-((yy-40)/2))/100.*float(heater_range)+heater_offset;
     if (heater_num == 1) {
       if (pid) {
 	send_heater1_temp(heater_set_f);
+	heater1_target = heater_set_f;
 	display_heater1_target();
       }
       else {
@@ -371,6 +372,7 @@ void check_heater_touch(int xx, int yy, int heater_num, int heater_range, float 
     else {
       if (pid) {
 	send_heater2_temp(heater_set_f);
+	heater2_target = heater_set_f;
 	display_heater2_target();
       }
       else {
@@ -504,7 +506,7 @@ void loop(void) {
 	check_menu_touch(xx,yy);
 	break;
       case MASH:
-	check_heater_touch(xx, yy, 2, 80., 100., true);
+	check_heater_touch(xx, yy, 2, 60., 40., true);
 	check_menu_touch(xx,yy);
 	break;
       case PUMPOUT:
@@ -568,7 +570,7 @@ void loop(void) {
 
       if (message_bytes[1] == 0x05) {
         // Receive temperature 1
-	if (message_bytes[2] != temp1.int_part && message_bytes[3] != temp1.dec_part) {
+	if (message_bytes[2] != temp1.int_part || message_bytes[3] != temp1.dec_part) {
 	  temp1.int_part = message_bytes[2];
 	  temp1.dec_part = message_bytes[3];
 	  display_temp1();
@@ -576,7 +578,7 @@ void loop(void) {
       }
       else if (message_bytes[1] == 0x06) {
         // Receive heater1 percentage
-	if (message_bytes[2] != heater1_percent.int_part && message_bytes[3] != heater1_percent.dec_part) {
+	if (message_bytes[2] != heater1_percent.int_part || message_bytes[3] != heater1_percent.dec_part) {
 	  heater1_percent.int_part = message_bytes[2];
 	  heater1_percent.dec_part = message_bytes[3];
 	  display_heater1();
@@ -584,10 +586,19 @@ void loop(void) {
       }
       else if (message_bytes[1] == 0x07) {
         // Receive temperature 2
-	if (message_bytes[2] != temp2.int_part && message_bytes[3] != temp2.dec_part) {
+	if (message_bytes[2] != temp2.int_part || message_bytes[3] != temp2.dec_part) {
 	  temp2.int_part = message_bytes[2];
 	  temp2.dec_part = message_bytes[3];
 	  display_temp2();
+	}
+      }
+      else if (message_bytes[1] == 0x08) {
+        // Receive heater2 percentage
+
+	if (message_bytes[2] != heater2_percent.int_part || message_bytes[3] != heater2_percent.dec_part) {
+	  heater2_percent.int_part = message_bytes[2];
+	  heater2_percent.dec_part = message_bytes[3];
+	  display_heater2();
 	}
       }
       else {
