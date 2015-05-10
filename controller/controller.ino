@@ -27,7 +27,7 @@ volatile unsigned long int flow_count = 0;
 unsigned long int prev_flow_count = 0;
 
 // Factor to convert flow count to gallons
-float flow_factor = .001;
+float flow_factor = .000346;
 
 int pump_pin = 7;
 int solenoid_pin = 4;
@@ -269,6 +269,13 @@ void prepare_mash_menu() {
   tft.println("OFF");  
   tft.setCursor(42, 80);
   tft.println("ON");  
+
+  tft.setCursor(160, 40);
+  tft.println("40");  
+  tft.setCursor(160, 80);
+  tft.println("60");  
+  tft.setCursor(160, 120);
+  tft.println("80");  
   
   display_temp2();
 }
@@ -409,6 +416,43 @@ void check_heater_touch(int xx, int yy, int heater_num, int heater_range, float 
   }
 }
 
+void check_temp_touch(int xx, int yy, int heater_num, bool pid) 
+{
+  bool point_found = false;
+  float heater_set_f = 0.0;
+  if (xx >= 160 && yy >= 40 && yy <80 ) {
+    // Target temp 40
+    heater_set_f = 40.0;
+    point_found = true;
+  }
+  else if (xx >= 160 && yy >= 80 && yy <120 ) {
+    // Target temp 60
+    heater_set_f = 60.0;
+    point_found = true;
+  }
+  else if (xx >= 160 && yy >= 120 && yy <160 ) {
+    // Target temp 70
+    heater_set_f = 70.0;
+    point_found = true;
+  }
+  if (point_found) {
+    tft.fillRect(25,140,100,40,ILI9341_BLACK);
+    tft.setCursor(25, 140);
+    if (heater_num == 1) {
+      send_heater1_temp(heater_set_f);
+      heater1_target = heater_set_f;
+      display_heater1_target();
+      display_heater1();
+    }
+    else {
+      send_heater2_temp(heater_set_f);
+      heater2_target = heater_set_f;
+      display_heater2_target();
+      display_heater2();
+    }
+  }
+}
+
 void check_menu_touch(int xx, int yy) {
   if (xx>=110 && xx <= 210 && yy<=40) {
     menu = TOP;
@@ -507,6 +551,7 @@ void loop(void) {
 	break;
       case MASH:
 	check_heater_touch(xx, yy, 2, 60., 40., true);
+	check_temp_touch(xx, yy, 2);
 	check_menu_touch(xx,yy);
 	break;
       case PUMPOUT:
