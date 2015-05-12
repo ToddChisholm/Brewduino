@@ -132,7 +132,7 @@ int message_bytes[4];
 int message_ptr = 0;
 
 PID pid1(&pid1_temp, &pid1_output, &heater1_target_temp, 100./5., 1./6., 0.0, DIRECT);
-PID pid2(&pid2_temp, &pid2_output, &heater2_target_temp, 30./5.,  1./6., 0.0, DIRECT);
+PID pid2(&pid2_temp, &pid2_output, &heater2_target_temp, 50./3.,  1./300., 0.0, DIRECT);
 
 void change_heater1(boolean oo) {
   if (oo) {
@@ -177,7 +177,7 @@ void setup() {
   pid1.SetOutputLimits(0, 100);
 
   // PID 2 controls the RIMS element
-  pid2.SetOutputLimits(0, 30);
+  pid2.SetOutputLimits(0, 50);
  
   // Clear the serial buffer
   char message[61];
