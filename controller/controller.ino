@@ -22,6 +22,7 @@ boolean pump_on = false;
 unsigned long pump_transition_time = 0;
 unsigned long sol_update_time = 0;
 unsigned long flow_update_time = 0;
+unsigned long last_flow_touch_time = 0;
 
 volatile unsigned long int flow_count = 0;
 unsigned long int prev_flow_count = 0;
@@ -324,19 +325,20 @@ void prepare_addwater_menu() {
   tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
   tft.println("MENU");
   tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
-  tft.setCursor(0, 100);
+  tft.setCursor(0, 60);
   tft.setTextColor(ILI9341_BLUE);
   tft.println("RESET");
 
-  tft.setCursor(0, 200);
+  tft.setCursor(0, 160);
+  tft.setTextSize(3);
   tft.println("5G");
-  tft.setCursor(80, 200);
+  tft.setCursor(80, 160);
   tft.println("1G");
-  tft.setCursor(160, 200);
-  tft.println("0.5G");
-  tft.setCursor(240, 200);
-  tft.println("0.25G");
-
+  tft.setCursor(160, 160);
+  tft.println("1/2G");
+  tft.setCursor(240, 160);
+  tft.println("1/4G");
+  tft.setTextSize(4);
   display_water_count(true);
 }
 
@@ -584,42 +586,48 @@ void loop(void) {
 	break;
       case ADDWATER:
 	check_menu_touch(xx,yy);
-	if (xx<=125 && yy >= 100 && yy<=140) {
+	if (xx<=125 && yy >= 60 && yy<=100) {
 	  flow_count = 0;
 	  target_flow_count = 0;
 	  display_water_count(true);
 	}
-	else if (xx> 0 && xx<=60 && yy >= 160 && yy<=200) {
-	  // Add 5G
-	  if (target_flow_count < flow_count) {
-	    target_flow_count = flow_count;
+	else if ( millis() > last_flow_touch_time+750) { // Prevent double bouncing 
+	  if (xx> 0 && xx<=60 && yy >= 160 && yy<=200) {
+	    // Add 5G
+	    if (target_flow_count < flow_count) {
+	      target_flow_count = flow_count;
+	    }
+	    target_flow_count += int(5.0/flow_factor);
+	    display_water_count(true);
+	    last_flow_touch_time = millis();
 	  }
-	  target_flow_count += int(5.0/flow_factor);
-	  display_water_count(true);
-	}
-	else if (xx> 80 && xx<=140 && yy >= 160 && yy<=200) {
-	  // Add 1G
-	  if (target_flow_count < flow_count) {
-	    target_flow_count = flow_count;
+	  else if (xx> 80 && xx<=140 && yy >= 160 && yy<=200) {
+	    // Add 1G
+	    if (target_flow_count < flow_count) {
+	      target_flow_count = flow_count;
+	    }
+	    target_flow_count += int(1.0/flow_factor);
+	    display_water_count(true);
+	    last_flow_touch_time = millis();
 	  }
-	  target_flow_count += int(1.0/flow_factor);
-	  display_water_count(true);
-	}
-	else if (xx> 160 && xx<=220 && yy >= 160 && yy<=200) {
-	  // Add 0.5G
-	  if (target_flow_count < flow_count) {
-	    target_flow_count = flow_count;
+	  else if (xx> 160 && xx<=220 && yy >= 160 && yy<=200) {
+	    // Add 0.5G
+	    if (target_flow_count < flow_count) {
+	      target_flow_count = flow_count;
+	    }
+	    target_flow_count += int(0.5/flow_factor);
+	    display_water_count(true);
+	    last_flow_touch_time = millis();
 	  }
-	  target_flow_count += int(0.5/flow_factor);
-	  display_water_count(true);
-	}
-	else if (xx> 240 && yy >= 160 && yy<=200) {
-	  // Add 0.25G
-	  if (target_flow_count < flow_count) {
-	    target_flow_count = flow_count;
+	  else if (xx> 240 && yy >= 160 && yy<=200) {
+	    // Add 0.25G
+	    if (target_flow_count < flow_count) {
+	      target_flow_count = flow_count;
+	    }
+	    target_flow_count += int(0.25/flow_factor);
+	    display_water_count(true);
+	    last_flow_touch_time = millis();
 	  }
-	  target_flow_count += int(0.25/flow_factor);
-	  display_water_count(true);
 	}
 	break;
       }
