@@ -25,6 +25,7 @@ unsigned long flow_update_time = 0;
 
 volatile unsigned long int flow_count = 0;
 unsigned long int prev_flow_count = 0;
+unsigned long int target_flow_count = 0;
 
 // Factor to convert flow count to gallons
 float flow_factor = .0005164;
@@ -170,14 +171,27 @@ void display_heater2_target() {
 }
 void display_water_count(bool force) {
   if ( force || (menu==ADDWATER && prev_flow_count != flow_count) ) {
-    tft.fillRect(110,150,125,40,ILI9341_BLACK);
-    tft.setCursor(110, 150);
+    tft.fillRect(20,200,300,40,ILI9341_BLACK);
+    tft.setCursor(20, 200);
     float gallons = float(flow_count)*flow_factor;
     int gallons_int_part = int(gallons);
     int gallons_dec_part1 = int((gallons-float(gallons_int_part))*10.);
     int gallons_dec_part2 = int((gallons-float(gallons_dec_part1)/10.-float(gallons_int_part))*100.);
     prev_flow_count = flow_count;
     tft.println(String(gallons_int_part)+"."+String(gallons_dec_part1)+String(gallons_dec_part2)+"G");
+
+    tft.setCursor(160, 200);
+    if (target_flow_count > flow_count) {
+      float gallons = float(target_flow_count-flow_count)*flow_factor;
+      int gallons_int_part = int(gallons);
+      int gallons_dec_part1 = int((gallons-float(gallons_int_part))*10.);
+      int gallons_dec_part2 = int((gallons-float(gallons_dec_part1)/10.-float(gallons_int_part))*100.);
+      prev_flow_count = flow_count;
+      tft.println(String(gallons_int_part)+"."+String(gallons_dec_part1)+String(gallons_dec_part2)+"G");
+    }
+    else {
+      tft.println("---G");
+    }
   }
 }
 
@@ -313,6 +327,16 @@ void prepare_addwater_menu() {
   tft.setCursor(0, 100);
   tft.setTextColor(ILI9341_BLUE);
   tft.println("RESET");
+
+  tft.setCursor(0, 200);
+  tft.println("5G");
+  tft.setCursor(80, 200);
+  tft.println("1G");
+  tft.setCursor(160, 200);
+  tft.println("0.5G");
+  tft.setCursor(240, 200);
+  tft.println("0.25G");
+
   display_water_count(true);
 }
 
@@ -562,6 +586,39 @@ void loop(void) {
 	check_menu_touch(xx,yy);
 	if (xx<=125 && yy >= 100 && yy<=140) {
 	  flow_count = 0;
+	  target_flow_count = 0;
+	  display_water_count(true);
+	}
+	else if (xx> 0 && xx<=60 && yy >= 160 && yy<=200) {
+	  // Add 5G
+	  if (target_flow_count < flow_count) {
+	    target_flow_count = flow_count;
+	  }
+	  target_flow_count += int(5.0/flow_factor);
+	  display_water_count(true);
+	}
+	else if (xx> 80 && xx<=140 && yy >= 160 && yy<=200) {
+	  // Add 1G
+	  if (target_flow_count < flow_count) {
+	    target_flow_count = flow_count;
+	  }
+	  target_flow_count += int(1.0/flow_factor);
+	  display_water_count(true);
+	}
+	else if (xx> 160 && xx<=220 && yy >= 160 && yy<=200) {
+	  // Add 0.5G
+	  if (target_flow_count < flow_count) {
+	    target_flow_count = flow_count;
+	  }
+	  target_flow_count += int(0.5/flow_factor);
+	  display_water_count(true);
+	}
+	else if (xx> 240 && yy >= 160 && yy<=200) {
+	  // Add 0.25G
+	  if (target_flow_count < flow_count) {
+	    target_flow_count = flow_count;
+	  }
+	  target_flow_count += int(0.25/flow_factor);
 	  display_water_count(true);
 	}
 	break;
@@ -592,11 +649,16 @@ void loop(void) {
 
   // Water solenoid update
   if (millis() > sol_update_time) {
-    if (digitalRead(wtr_rqst_pin) == LOW) {
+    if ( target_flow_count > flow_count ) {
       digitalWrite(solenoid_pin, HIGH);
     }
     else {
-      digitalWrite(solenoid_pin, LOW);
+      if (digitalRead(wtr_rqst_pin) == LOW) {
+	digitalWrite(solenoid_pin, HIGH);
+      }
+      else {
+	digitalWrite(solenoid_pin, LOW);
+      }
     }
     sol_update_time = millis()+sol_update_millis;  
   }
