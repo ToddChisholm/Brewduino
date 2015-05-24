@@ -228,6 +228,16 @@ void prepare_boil_menu() {
   tft.setCursor(42, 80);
   tft.println("ON");  
   
+  tft.setCursor(220, 0);
+  tft.setTextColor(ILI9341_BLUE);
+  tft.println("PUMP");
+  tft.setCursor(220, 40);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.println("OFF");
+  tft.setCursor(220, 100);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.println("ON");
+
   display_temp1();
 }
 
@@ -381,6 +391,18 @@ void check_pump_touch(int xx, int yy) {
       pump_on = true;  
       change_pump(pump_on);
     }
+  }
+}
+
+void check_pump_onoff_touch(int xx, int yy) {
+  // Pump change
+  if (xx>=220 && yy>=40 && yy<80) {
+    pump_on = false;  
+    change_pump(pump_on);
+  }
+  else if (xx>=220 && yy>=100 && yy<140) {
+    pump_on = true;  
+    change_pump(pump_on);
   }
 }
 
@@ -569,6 +591,7 @@ void loop(void) {
       case BOIL:
 	check_heater_touch(xx, yy, 1, 100, 0., false);
 	check_menu_touch(xx,yy);
+	check_pump_onoff_touch(xx,yy);
 	break;
       case PUMPACROSS:
 	check_heater_touch(xx, yy, 2, 100, 0., false);
