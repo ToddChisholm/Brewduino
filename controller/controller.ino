@@ -52,7 +52,7 @@ float_data heater2_percent = {0+100,0};
 float heater1_target = 0.;
 float heater2_target = 0.;
 
-enum MenuPages { TOP, BOIL, PUMPACROSS, MASH, PUMPOUT, ADDWATER};
+enum MenuPages { TOP, BOIL, PIDBOIL, PUMPACROSS, MASH, PUMPOUT, ADDWATER};
 
 MenuPages menu = TOP;
 
@@ -126,7 +126,7 @@ void service_flow_pin() {
 
 // Each of the display routines is responsible for checking the menu
 void display_temp1() {
-  if (menu == BOIL) {
+  if (menu == BOIL || menu == PIDBOIL) {
     tft.fillRect(60,200,100,40,ILI9341_BLACK);
     tft.setCursor(60, 200);
     tft.println(String(int(temp1.int_part)-100)+"."+String(temp1.dec_part)+"C");
@@ -141,7 +141,7 @@ void display_temp2() {
 }
 
 void display_heater1() {
-  if (menu == BOIL) {
+  if (menu == BOIL || menu == PIDBOIL) {
     tft.fillRect(25,120,120,40,ILI9341_BLACK);
     tft.setCursor(25, 120);
     tft.println(String(int(heater1_percent.int_part)-100)+"."+String(heater1_percent.dec_part));
@@ -155,7 +155,7 @@ void display_heater2() {
   }
 }
 void display_heater1_target() {
-  if (menu == BOIL) {
+  if (menu == BOIL || menu == PIDBOIL) {
     float_data heater1_target_fd = float_to_float_data(heater1_target);
     tft.fillRect(25,160,120,40,ILI9341_BLACK);
     tft.setCursor(25, 160);
@@ -201,6 +201,8 @@ void prepare_top_menu() {
   tft.setTextSize(4);
   tft.setCursor(0, 0);
   tft.println("BOIL");  
+  tft.setCursor(160, 0);
+  tft.println("PID BOIL");  
   tft.setCursor(0, 45);
   tft.println("PUMP TO BOIL");  
   tft.setCursor(0, 90);
@@ -303,6 +305,33 @@ void prepare_mash_menu() {
   tft.println("70");  
   
   display_temp2();
+}
+
+void prepare_pidboil_menu() {
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setCursor(110, 0);
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
+  tft.println("MENU");
+  tft.setCursor(0, 0);
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
+  tft.println("HEAT");
+  tft.setTextColor(ILI9341_WHITE);
+  tft.drawRect(0,40,20,200,ILI9341_RED);
+  tft.setCursor(25, 120);
+  tft.println("0%");
+  tft.setCursor(35, 40);
+  tft.println("OFF");  
+  tft.setCursor(42, 80);
+  tft.println("ON");  
+
+  tft.setCursor(200, 40);
+  tft.println("40");  
+  tft.setCursor(200, 80);
+  tft.println("60");  
+  tft.setCursor(200, 120);
+  tft.println("70");  
+  
+  display_temp1();
 }
 
 void prepare_pumpout_menu() {
@@ -559,6 +588,12 @@ void loop(void) {
 	  menu = BOIL;
 	  prepare_boil_menu();
 	}
+	else if ( xx > 160 && yy >= 0 && yy <45) {
+	  // PID Boil
+	  clear_all();
+	  menu = PIDBOIL;
+	  prepare_pidboil_menu();
+	}
 	else if ( xx <=160 && yy >= 45 && yy <90) {
 	  // Pump across
 	  clear_all();
@@ -592,6 +627,12 @@ void loop(void) {
 	check_heater_touch(xx, yy, 1, 100, 0., false);
 	check_menu_touch(xx,yy);
 	check_pump_onoff_touch(xx,yy);
+	break;
+      case PIDBOIL:
+	check_heater_touch(xx, yy, 1, 60, 40., true);
+	check_temp_touch(xx, yy, 1);
+	check_menu_touch(xx,yy);
+	//check_pump_onoff_touch(xx,yy);
 	break;
       case PUMPACROSS:
 	check_heater_touch(xx, yy, 2, 100, 0., false);
