@@ -119,7 +119,7 @@ void send_heater2_temp_100prct(float temp) {
   Serial1.write(strt_mark);
   // Temperature 2 percentage
   byte heater2_pid_temp_mark_100prct = 9;
-  Serial1.write(heater2_pid_temp_mark);
+  Serial1.write(heater2_pid_temp_mark_100prct);
   Serial1.write(heater2_temp.int_part);
   Serial1.write(heater2_temp.dec_part);
 }
@@ -147,8 +147,14 @@ void display_temp1() {
 }
 void display_temp2() {
   if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
-    tft.fillRect(60,200,100,40,ILI9341_BLACK);
-    tft.setCursor(60, 200);
+    if (menu==SPARGE) {
+      tft.fillRect(200,40,100,40,ILI9341_BLACK);
+      tft.setCursor(200, 40);
+    }
+    else {
+      tft.fillRect(60,200,100,40,ILI9341_BLACK);
+      tft.setCursor(60, 200);
+    }
     tft.println(String(int(temp2.int_part)-100)+"."+String(temp2.dec_part)+"C");
   }
 }
@@ -162,8 +168,14 @@ void display_heater1() {
 }
 void display_heater2() {
   if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
-    tft.fillRect(25,120,120,40,ILI9341_BLACK);
-    tft.setCursor(25, 120);
+    if (menu==SPARGE) {
+      tft.fillRect(200,80,120,40,ILI9341_BLACK);
+      tft.setCursor(200, 80);
+    }
+    else {
+      tft.fillRect(25,120,120,40,ILI9341_BLACK);
+      tft.setCursor(25, 120);
+    }
     tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part)+"%");
   }
 }
@@ -178,8 +190,15 @@ void display_heater1_target() {
 void display_heater2_target() {
   if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
     float_data heater2_target_fd = float_to_float_data(heater2_target);
-    tft.fillRect(25,160,120,40,ILI9341_BLACK);
-    tft.setCursor(25, 160);
+    if (menu==SPARGE) {
+      tft.fillRect(200,120,120,40,ILI9341_BLACK);
+      tft.setCursor(200, 120);
+    }
+    else {
+      tft.fillRect(25,160,120,40,ILI9341_BLACK);
+      tft.setCursor(25, 160);
+    }
+
     tft.println(String(int(heater2_target_fd.int_part)-100)+"."+String(heater2_target_fd.dec_part)+"C");
   }
 }
@@ -371,9 +390,9 @@ void prepare_sparge_menu() {
   tft.setTextSize(4);
   display_water_count(true);
   
-  display_temp2();
-  display_heater2();
-  display_heater2_target();
+  display_temp2(true);
+  display_heater2(true);
+  display_heater2_target(true);
 }
 
 void prepare_pumpout_menu() {
