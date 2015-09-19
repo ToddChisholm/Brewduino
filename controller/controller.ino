@@ -52,11 +52,14 @@ float_data heater2_percent = {0+100,0};
 float heater1_target = 0.;
 float heater2_target = 0.;
 
-enum MenuPages { TOP, BOIL, PIDBOIL, PUMPACROSS, MASH, PUMPOUT, ADDWATER};
+enum MenuPages { TOP, BOIL, PIDBOIL, PUMPACROSS, MASH, SPARGE, PUMPOUT, ADDWATER};
 
 MenuPages menu = TOP;
 
 byte strt_mark = 255;
+
+boolean current_sparge = false;
+boolean current_add_water = false;
 
 float float_data_to_float(struct float_data fd) {
   return float(fd.int_part)-100. + float(fd.dec_part)/10.;
@@ -111,6 +114,16 @@ void send_heater2_temp(float temp) {
   Serial1.write(heater2_temp.dec_part);
 }
 
+void send_heater2_temp_100prct(float temp) {
+  float_data heater2_temp = float_to_float_data(temp);
+  Serial1.write(strt_mark);
+  // Temperature 2 percentage
+  byte heater2_pid_temp_mark_100prct = 9;
+  Serial1.write(heater2_pid_temp_mark);
+  Serial1.write(heater2_temp.int_part);
+  Serial1.write(heater2_temp.dec_part);
+}
+
 void change_pump(boolean oo) {
   if (oo) {
     digitalWrite(pump_pin, HIGH);  
@@ -133,7 +146,7 @@ void display_temp1() {
   }
 }
 void display_temp2() {
-  if (menu == PUMPACROSS || menu == MASH) {
+  if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
     tft.fillRect(60,200,100,40,ILI9341_BLACK);
     tft.setCursor(60, 200);
     tft.println(String(int(temp2.int_part)-100)+"."+String(temp2.dec_part)+"C");
@@ -148,7 +161,7 @@ void display_heater1() {
   }
 }
 void display_heater2() {
-  if (menu == PUMPACROSS || menu == MASH) {
+  if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
     tft.fillRect(25,120,120,40,ILI9341_BLACK);
     tft.setCursor(25, 120);
     tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part)+"%");
@@ -163,7 +176,7 @@ void display_heater1_target() {
   }
 }
 void display_heater2_target() {
-  if (menu == PUMPACROSS || menu == MASH) {
+  if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
     float_data heater2_target_fd = float_to_float_data(heater2_target);
     tft.fillRect(25,160,120,40,ILI9341_BLACK);
     tft.setCursor(25, 160);
@@ -171,7 +184,7 @@ void display_heater2_target() {
   }
 }
 void display_water_count(bool force) {
-  if ( force || (menu==ADDWATER && prev_flow_count != flow_count) ) {
+  if ( force || ((menu==SPARGE||menu==ADDWATER) && prev_flow_count != flow_count) ) {
     tft.fillRect(20,200,300,40,ILI9341_BLACK);
     tft.setCursor(20, 200);
     float gallons = float(flow_count)*flow_factor;
@@ -198,7 +211,7 @@ void display_water_count(bool force) {
 
 void prepare_top_menu() {
   tft.fillScreen(ILI9341_BLACK);
-  tft.setTextSize(4);
+  tft.setTextSize(3);
   tft.setCursor(0, 0);
   tft.println("BOIL");  
   tft.setCursor(160, 0);
@@ -207,6 +220,8 @@ void prepare_top_menu() {
   tft.println("PUMP TO BOIL");  
   tft.setCursor(0, 90);
   tft.println("MASH");  
+  tft.setCursor(160, 90);
+  tft.println("SPRG");  
   tft.setCursor(0, 135);
   tft.println("PUMP OUT");  
   tft.setCursor(0, 180);
@@ -334,6 +349,28 @@ void prepare_pidboil_menu() {
   display_temp1();
 }
 
+void prepare_sparge_menu() {
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setCursor(110, 0);
+  tft.setTextColor(ILI9341_RED);  tft.setTextSize(4);
+  tft.println("MENU");
+  tft.setCursor(0, 0);
+  tft.setTextColor(ILI9341_RED);  tft.setTextSize(4);
+  tft.println("HEAT");
+  tft.setTextColor(ILI9341_RED);
+  tft.drawRect(0,40,20,200,ILI9341_RED);
+  tft.setCursor(25, 120);
+  tft.println("0%");
+  tft.setCursor(35, 40);
+  tft.println("OFF");  
+  tft.setCursor(42, 80);
+  tft.println("ON");  
+  
+  display_temp2();
+  display_heater2();
+  display_heater2_target();
+}
+
 void prepare_pumpout_menu() {
   tft.fillScreen(ILI9341_BLACK);
   tft.setCursor(110, 0);
@@ -419,6 +456,51 @@ void check_pump_touch(int xx, int yy) {
       // pump 100%
       pump_on = true;  
       change_pump(pump_on);
+    }
+  }
+}
+void check_add_water_touch(int xx, int yy, boolean sparging) {
+  if (xx<=125 && yy >= 60 && yy<=100) {
+    flow_count = 0;
+    target_flow_count = 0;
+    display_water_count(true);
+  }
+  else if ( millis() > last_flow_touch_time+750) { // Prevent double bouncing 
+    if (xx> 0 && xx<=60 && yy >= 160 && yy<=200) {
+      // Add 5G
+      if (target_flow_count < flow_count) {
+	target_flow_count = flow_count;
+      }
+      target_flow_count += int(5.0/flow_factor);
+      display_water_count(true);
+      last_flow_touch_time = millis();
+    }
+    else if (xx> 80 && xx<=140 && yy >= 160 && yy<=200) {
+      // Add 1G
+      if (target_flow_count < flow_count) {
+	target_flow_count = flow_count;
+      }
+      target_flow_count += int(1.0/flow_factor);
+      display_water_count(true);
+      last_flow_touch_time = millis();
+    }
+    else if (xx> 160 && xx<=220 && yy >= 160 && yy<=200) {
+      // Add 0.5G
+      if (target_flow_count < flow_count) {
+	target_flow_count = flow_count;
+      }
+      target_flow_count += int(0.5/flow_factor);
+      display_water_count(true);
+      last_flow_touch_time = millis();
+    }
+    else if (xx> 240 && yy >= 160 && yy<=200) {
+      // Add 0.25G
+      if (target_flow_count < flow_count) {
+	target_flow_count = flow_count;
+      }
+      target_flow_count += int(0.25/flow_factor);
+      display_water_count(true);
+      last_flow_touch_time = millis();
     }
   }
 }
@@ -610,6 +692,13 @@ void loop(void) {
 	  pump_on = true;  
 	  change_pump(pump_on);
 	}
+	else if ( xx > 160 && yy >= 90 && yy <135) {
+	  // Sparge
+	  clear_all();
+	  menu = SPARGE;
+	  prepare_sparge_menu();
+	  // pump 100%
+	}
 	else if ( xx <=160 && yy >= 135 && yy <180) {
 	  // Pump out
 	  clear_all();
@@ -650,49 +739,11 @@ void loop(void) {
 	break;
       case ADDWATER:
 	check_menu_touch(xx,yy);
-	if (xx<=125 && yy >= 60 && yy<=100) {
-	  flow_count = 0;
-	  target_flow_count = 0;
-	  display_water_count(true);
-	}
-	else if ( millis() > last_flow_touch_time+750) { // Prevent double bouncing 
-	  if (xx> 0 && xx<=60 && yy >= 160 && yy<=200) {
-	    // Add 5G
-	    if (target_flow_count < flow_count) {
-	      target_flow_count = flow_count;
-	    }
-	    target_flow_count += int(5.0/flow_factor);
-	    display_water_count(true);
-	    last_flow_touch_time = millis();
-	  }
-	  else if (xx> 80 && xx<=140 && yy >= 160 && yy<=200) {
-	    // Add 1G
-	    if (target_flow_count < flow_count) {
-	      target_flow_count = flow_count;
-	    }
-	    target_flow_count += int(1.0/flow_factor);
-	    display_water_count(true);
-	    last_flow_touch_time = millis();
-	  }
-	  else if (xx> 160 && xx<=220 && yy >= 160 && yy<=200) {
-	    // Add 0.5G
-	    if (target_flow_count < flow_count) {
-	      target_flow_count = flow_count;
-	    }
-	    target_flow_count += int(0.5/flow_factor);
-	    display_water_count(true);
-	    last_flow_touch_time = millis();
-	  }
-	  else if (xx> 240 && yy >= 160 && yy<=200) {
-	    // Add 0.25G
-	    if (target_flow_count < flow_count) {
-	      target_flow_count = flow_count;
-	    }
-	    target_flow_count += int(0.25/flow_factor);
-	    display_water_count(true);
-	    last_flow_touch_time = millis();
-	  }
-	}
+	check_add_water_touch(xx, yy, false);
+	break;
+      case SPARGE:
+	check_menu_touch(xx,yy);
+	check_add_water_touch(xx, yy, true);
 	break;
       }
   } 
@@ -723,6 +774,17 @@ void loop(void) {
   if (millis() > sol_update_time) {
     if ( target_flow_count > flow_count ) {
       digitalWrite(solenoid_pin, HIGH);
+      if ( !current_add_water ) {
+	current_add_water = true;
+	if ( menu==SPARGE ) {
+	  current_sparge = true;
+	  // Turn on the 100% PID control on the RIMS
+	  // Fix at 170F/77C for now
+	  send_heater2_temp_100prct(77.0);
+	  heater2_target = 77.0;
+	  display_heater2_target();
+	}
+      }
     }
     else {
       if (digitalRead(wtr_rqst_pin) == LOW) {
@@ -730,6 +792,14 @@ void loop(void) {
       }
       else {
 	digitalWrite(solenoid_pin, LOW);
+	if ( current_add_water ) {
+	  current_add_water = false;
+	  if ( current_sparge ) {
+	    current_sparge = false;
+	    // Turn off the 100% PID control on the RIMS
+	    send_heater2_percent(0.0);
+	  }
+	}
       }
     }
     sol_update_time = millis()+sol_update_millis;  

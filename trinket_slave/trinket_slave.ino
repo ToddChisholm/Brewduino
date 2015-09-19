@@ -132,7 +132,7 @@ int message_bytes[4];
 int message_ptr = 0;
 
 PID pid1(&pid1_temp, &pid1_output, &heater1_target_temp, 100./3., 1./300., 0.0, DIRECT);
-PID pid2(&pid2_temp, &pid2_output, &heater2_target_temp, 50./3.,  1./300., 0.0, DIRECT);
+PID pid2(&pid2_temp, &pid2_output, &heater2_target_temp, 50./3.,  1./100., 0.0, DIRECT);
 
 void change_heater1(boolean oo) {
   if (oo) {
@@ -177,6 +177,8 @@ void setup() {
   pid1.SetOutputLimits(0, 100);
 
   // PID 2 controls the RIMS element
+  // Default to 50% power for mashing
+  pid2.SetTunings(50./3.,  1./300., 0.0);
   pid2.SetOutputLimits(0, 50);
  
   // Clear the serial buffer
@@ -411,7 +413,7 @@ void loop() {
 	}
       }
       else if (message_bytes[1] == 3) {
-	// Set heater2 PID temperature
+	// Set heater2 PID temperature with 50% power range for mashing
 	// Make sure heater 1 is off
 	heater1_on = false;
 	heater1_percent.int_part = 100;
@@ -422,6 +424,10 @@ void loop() {
 
 	heater2_target_temp = float_data_to_float(message_bytes[2], message_bytes[3]);
 	heater2_pid_mode = true;
+
+	// Mash tunings
+	pid2.SetTunings(50./3.,  1./300., 0.0);
+	pid2.SetOutputLimits(0, 50);
 	pid2.SetMode(AUTOMATIC);
 	
 	heater2_percent.int_part = 100;
@@ -453,6 +459,30 @@ void loop() {
 	  change_heater2(heater2_on);
 	}
       }
+      else if (message_bytes[1] == 9) {
+	// Set heater2 PID temperature with 100% power range for sparging
+	// Make sure heater 1 is off
+	heater1_on = false;
+	heater1_percent.int_part = 100;
+	heater1_percent.dec_part = 0;
+	change_heater1(heater1_on);
+	heater1_pid_mode = false;
+	pid1.SetMode(MANUAL);
+
+	heater2_target_temp = float_data_to_float(message_bytes[2], message_bytes[3]);
+	heater2_pid_mode = true;
+
+	// Mash tunings
+	pid2.SetTunings(100./3.,  1./30., 0.0);
+	pid2.SetOutputLimits(0, 100);
+	pid2.SetMode(AUTOMATIC);
+	
+	heater2_percent.int_part = 100;
+	heater2_percent.dec_part = 0;
+	heater2_on = false;
+	change_heater2(heater2_on);
+      }
+
       // Clear message_bytes
       message_ptr = 0;
     }    
