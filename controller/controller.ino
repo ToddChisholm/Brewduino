@@ -352,19 +352,24 @@ void prepare_pidboil_menu() {
 void prepare_sparge_menu() {
   tft.fillScreen(ILI9341_BLACK);
   tft.setCursor(110, 0);
-  tft.setTextColor(ILI9341_RED);  tft.setTextSize(4);
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
   tft.println("MENU");
-  tft.setCursor(0, 0);
-  tft.setTextColor(ILI9341_RED);  tft.setTextSize(4);
-  tft.println("HEAT");
-  tft.setTextColor(ILI9341_RED);
-  tft.drawRect(0,40,20,200,ILI9341_RED);
-  tft.setCursor(25, 120);
-  tft.println("0%");
-  tft.setCursor(35, 40);
-  tft.println("OFF");  
-  tft.setCursor(42, 80);
-  tft.println("ON");  
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
+  tft.setCursor(0, 60);
+  tft.setTextColor(ILI9341_BLUE);
+  tft.println("RESET");
+
+  tft.setCursor(0, 160);
+  tft.setTextSize(3);
+  tft.println("5G");
+  tft.setCursor(80, 160);
+  tft.println("1G");
+  tft.setCursor(160, 160);
+  tft.println("1/2G");
+  tft.setCursor(240, 160);
+  tft.println("1/4G");
+  tft.setTextSize(4);
+  display_water_count(true);
   
   display_temp2();
   display_heater2();
