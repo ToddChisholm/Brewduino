@@ -357,14 +357,17 @@ void prepare_pidboil_menu() {
   tft.println("OFF");  
   tft.setCursor(42, 80);
   tft.println("ON");  
-
-  tft.setCursor(200, 40);
-  tft.println("40");  
-  tft.setCursor(200, 80);
-  tft.println("60");  
-  tft.setCursor(200, 120);
-  tft.println("70");  
   
+  tft.setCursor(220, 0);
+  tft.setTextColor(ILI9341_BLUE);
+  tft.println("PUMP");
+  tft.setCursor(220, 40);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.println("OFF");
+  tft.setCursor(220, 100);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.println("ON");
+
   display_temp1();
 }
 
@@ -743,9 +746,8 @@ void loop(void) {
 	break;
       case PIDBOIL:
 	check_heater_touch(xx, yy, 1, 60, 40., true);
-	check_temp_touch(xx, yy, 1);
 	check_menu_touch(xx,yy);
-	//check_pump_onoff_touch(xx,yy);
+	check_pump_onoff_touch(xx,yy);
 	break;
       case PUMPACROSS:
 	check_heater_touch(xx, yy, 2, 100, 0., false);
