@@ -174,7 +174,7 @@ void setup() {
   pid1.SetSampleTime(temp_update_millis-1);
   pid2.SetSampleTime(temp_update_millis-1);
   // PID 1 controls the boil element
-  pid1.SetOutputLimits(0, 100);
+  pid1.SetOutputLimits(0, 99);
 
   // PID 2 controls the RIMS element
   // Default to 50% power for mashing
@@ -381,7 +381,7 @@ void loop() {
 
 	heater1_target_temp = float_data_to_float(message_bytes[2], message_bytes[3]);
 	heater1_pid_mode = true;
-	pid2.SetMode(AUTOMATIC);
+	pid1.SetMode(AUTOMATIC);
 	heater1_percent.int_part = 100;
 	heater1_percent.dec_part = 0;
 	heater1_on = false;
