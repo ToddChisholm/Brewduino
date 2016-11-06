@@ -8,6 +8,21 @@
 #define TFT_DC 9
 #define TFT_CS 10
 
+#include <LiquidCrystal.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+#define ONE_WIRE_BUS 13
+
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire);
+
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+LiquidCrystal lcd(46,48,44);
+
 // Use hardware SPI (on Uno, #13, #12, #11) and the above for CS/DC
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
 // If using the breakout, change pins as desired
@@ -52,7 +67,7 @@ float_data heater2_percent = {0+100,0};
 float heater1_target = 0.;
 float heater2_target = 0.;
 
-enum MenuPages { TOP, BOIL, PIDBOIL, PUMPACROSS, MASH, SPARGE, PUMPOUT, ADDWATER};
+enum MenuPages { TOP, BOIL, PIDBOIL, PUMPACROSS, MASH, SPARGE, PUMPOUT, ADDWATER, PHCAL};
 
 MenuPages menu = TOP;
 
@@ -60,6 +75,73 @@ byte strt_mark = 255;
 
 boolean current_sparge = false;
 boolean current_add_water = false;
+
+String sensorstring = "";                             //a string to hold the data from the Atlas Scientific product
+boolean input_string_complete = false;                //have we received all the data from the PC
+boolean sensor_string_complete = false;               //have we received all the data from the Atlas Scientific product
+float pH;                                             //used to hold a floating point number that is the pH
+unsigned int ds_temp_millis = 10000;
+unsigned long ds_temp_update_time = 0;
+
+int first_digit = -1;
+boolean first_digit_entered = false;
+unsigned int first_digit_millis = 5000;
+long unsigned first_digit_timeout = 0;
+
+boolean button_must_clear = false;
+unsigned int debounce_millis = 80;
+unsigned long debounce_time = 0;
+
+int keyPressed() {
+  // Check the keypad
+  if (digitalRead(22) == LOW) {
+    // This is the asterisk
+  }    
+  if (digitalRead(23) == LOW) {
+    return 7;
+  }  
+  if (digitalRead(25) == LOW) {
+    return 4;
+  }  
+  if (digitalRead(27) == LOW) {
+    return 1;
+  }  
+  if (digitalRead(29) == LOW) {
+    return 0;
+  }  
+  if (digitalRead(31) == LOW) {
+    return 8;
+  }  
+  if (digitalRead(33) == LOW) {
+    return 5;
+  }  
+  if (digitalRead(35) == LOW) {
+    return 2;
+  }  
+  if (digitalRead(37) == LOW) {
+    // This is the hash
+  }  
+  if (digitalRead(39) == LOW) {
+    return 9;
+  }  
+  if (digitalRead(41) == LOW) {
+    return 6;
+  }  
+  if (digitalRead(43) == LOW) {
+    return 3;
+  }
+  return -1;
+}
+
+boolean isValidNumber(String str){
+   boolean isNum=false;
+   for(byte i=0;i<str.length();i++)
+   {
+       isNum = isDigit(str.charAt(i)) || str.charAt(i) == '+' || str.charAt(i) == '.' || str.charAt(i) == '-';
+       if(!isNum) return false;
+   }
+   return isNum;
+}
 
 float float_data_to_float(struct float_data fd) {
   return float(fd.int_part)-100. + float(fd.dec_part)/10.;
@@ -144,19 +226,17 @@ void display_temp1() {
     tft.setCursor(60, 200);
     tft.println(String(int(temp1.int_part)-100)+"."+String(temp1.dec_part)+"C");
   }
+  lcd.setCursor(5,0);
+  lcd.print(String(int(temp1.int_part)-100)+"."+String(temp1.dec_part)+"C");
 }
 void display_temp2() {
   if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
-    if (menu==SPARGE) {
-      tft.fillRect(200,40,100,40,ILI9341_BLACK);
-      tft.setCursor(200, 40);
-    }
-    else {
-      tft.fillRect(60,200,100,40,ILI9341_BLACK);
-      tft.setCursor(60, 200);
-    }
+    tft.fillRect(60,200,100,40,ILI9341_BLACK);
+    tft.setCursor(60, 200);
     tft.println(String(int(temp2.int_part)-100)+"."+String(temp2.dec_part)+"C");
   }
+  lcd.setCursor(5,1);
+  lcd.print(String(int(temp2.int_part)-100)+"."+String(temp2.dec_part)+"C");
 }
 
 void display_heater1() {
@@ -168,14 +248,8 @@ void display_heater1() {
 }
 void display_heater2() {
   if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
-    if (menu==SPARGE) {
-      tft.fillRect(200,80,120,40,ILI9341_BLACK);
-      tft.setCursor(200, 80);
-    }
-    else {
-      tft.fillRect(25,120,120,40,ILI9341_BLACK);
-      tft.setCursor(25, 120);
-    }
+    tft.fillRect(25,120,120,40,ILI9341_BLACK);
+    tft.setCursor(25, 120);
     tft.println(String(int(heater2_percent.int_part)-100)+"."+String(heater2_percent.dec_part)+"%");
   }
 }
@@ -190,15 +264,8 @@ void display_heater1_target() {
 void display_heater2_target() {
   if (menu == PUMPACROSS || menu == MASH || menu == SPARGE) {
     float_data heater2_target_fd = float_to_float_data(heater2_target);
-    if (menu==SPARGE) {
-      tft.fillRect(200,120,120,40,ILI9341_BLACK);
-      tft.setCursor(200, 120);
-    }
-    else {
-      tft.fillRect(25,160,120,40,ILI9341_BLACK);
-      tft.setCursor(25, 160);
-    }
-
+    tft.fillRect(25,160,120,40,ILI9341_BLACK);
+    tft.setCursor(25, 160);
     tft.println(String(int(heater2_target_fd.int_part)-100)+"."+String(heater2_target_fd.dec_part)+"C");
   }
 }
@@ -245,6 +312,64 @@ void prepare_top_menu() {
   tft.println("PUMP OUT");  
   tft.setCursor(0, 180);
   tft.println("ADD WATER");  
+  tft.setCursor(160, 180);
+  tft.println("PH CAL");  
+}
+
+void prepare_phcal_menu() {
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextSize(4);
+  tft.setCursor(110, 0);
+  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
+  tft.println("MENU");
+  tft.setCursor(0, 45);
+  tft.println("C4");  
+  tft.setCursor(0, 112);
+  tft.println("C7");  
+  tft.setCursor(0, 180);
+  tft.println("C10");  
+
+  // Clear the serial buffer to the Ph meter
+  if (Serial2.available() > 0) {                     //if we see that the Atlas Scientific product has sent a character
+    while (Serial2.available() > 0) {
+      if (sensor_string_complete == true) {
+	// If we have read a complete line but still have remaining data, clear the current line
+	sensorstring = "";
+	sensor_string_complete = false;
+      }
+      char inchar = (char)Serial2.read();              //get the char we just received
+      sensorstring += inchar;                           //add the char to the var called sensorstring
+      if (inchar == '\r') {                             //if the incoming character is a <CR>
+	sensor_string_complete = true;                  //set the flag
+      }
+    }
+  }
+  
+  Serial2.print("SLOPE,?\r");
+
+  // Check for response
+  boolean slope_string_complete = false;
+  unsigned long response_timeout = millis()+500;
+  String slopestring="";
+  slopestring.reserve(30);                           //set aside some bytes for receiving data from Atlas Scientific product
+  while (!slope_string_complete && millis()<response_timeout ) {
+    if (Serial2.available() > 0) {
+      char inchar = (char)Serial2.read();              //get the char we just received
+      slopestring += inchar;                           //add the char to the var called slopestring
+      if (inchar == '\r') {                             //if the incoming character is a <CR>
+	slope_string_complete = true;                  //set the flag
+      }
+    }
+  }
+  tft.setTextSize(3);
+  tft.setCursor(140, 90);
+  if (slope_string_complete) {
+    tft.println(slopestring.substring(6,slopestring.length()));
+  }
+  else {
+    tft.println("No slope");
+    tft.println(slopestring);
+  }
 }
 
 void prepare_boil_menu() {
@@ -369,33 +494,29 @@ void prepare_pidboil_menu() {
   tft.println("ON");
 
   display_temp1();
+
 }
 
 void prepare_sparge_menu() {
   tft.fillScreen(ILI9341_BLACK);
   tft.setCursor(110, 0);
-  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
+  tft.setTextColor(ILI9341_RED);  tft.setTextSize(4);
   tft.println("MENU");
-  tft.setTextColor(ILI9341_BLUE);  tft.setTextSize(4);
-  tft.setCursor(0, 60);
-  tft.setTextColor(ILI9341_BLUE);
-  tft.println("RESET");
-
-  tft.setCursor(0, 160);
-  tft.setTextSize(3);
-  tft.println("5G");
-  tft.setCursor(80, 160);
-  tft.println("1G");
-  tft.setCursor(160, 160);
-  tft.println("1/2G");
-  tft.setCursor(240, 160);
-  tft.println("1/4G");
-  tft.setTextSize(4);
-  display_water_count(true);
+  tft.setCursor(0, 0);
+  tft.setTextColor(ILI9341_RED);  tft.setTextSize(4);
+  tft.println("HEAT");
+  tft.setTextColor(ILI9341_RED);
+  tft.drawRect(0,40,20,200,ILI9341_RED);
+  tft.setCursor(25, 120);
+  tft.println("0%");
+  tft.setCursor(35, 40);
+  tft.println("OFF");  
+  tft.setCursor(42, 80);
+  tft.println("ON");  
   
-  display_temp2(true);
-  display_heater2(true);
-  display_heater2_target(true);
+  display_temp2();
+  display_heater2();
+  display_heater2_target();
 }
 
 void prepare_pumpout_menu() {
@@ -486,6 +607,7 @@ void check_pump_touch(int xx, int yy) {
     }
   }
 }
+
 void check_add_water_touch(int xx, int yy, boolean sparging) {
   if (xx<=125 && yy >= 60 && yy<=100) {
     flow_count = 0;
@@ -541,6 +663,52 @@ void check_pump_onoff_touch(int xx, int yy) {
   else if (xx>=220 && yy>=100 && yy<140) {
     pump_on = true;  
     change_pump(pump_on);
+  }
+}
+
+void check_phcal_touch(int xx, int yy)
+{
+  boolean cal_sent = false;
+  if ( xx <=100 && yy >= 45 && yy <90) {
+    // Calibrate to 4
+    Serial2.print("Cal,mid,4.00\r");
+    cal_sent = true;
+  }
+  else if ( xx <=100 && yy >= 112 && yy <147) {
+    // Calibrate to 7
+    Serial2.print("Cal,mid,7.00\r");
+    cal_sent = true;
+  }
+  else if ( xx <=100 && yy >= 180 && yy <225) {
+    // Calibrate to 10
+    Serial2.print("Cal,mid,10.00\r");
+    cal_sent = true;
+  }
+  if (cal_sent) {
+    // Check for the OK
+    boolean ok_string_complete = false;
+    unsigned long response_timeout = millis()+250;
+    String okstring="";
+    okstring.reserve(30);                           //set aside some bytes for receiving data from Atlas Scientific product
+    while (!ok_string_complete && millis()<response_timeout ) {
+      if (Serial2.available() > 0) {
+	char inchar = (char)Serial2.read();              //get the char we just received
+	okstring += inchar;                           //add the char to the var called okstring
+	if (inchar == '\r') {                             //if the incoming character is a <CR>
+	  ok_string_complete = true;                  //set the flag
+	}
+      }
+    }
+    if (ok_string_complete) {
+      tft.setTextSize(3);
+      tft.setCursor(160, 90);
+      if (ok_string_complete) {
+	tft.println(okstring);
+      }
+      else {
+	tft.println("No OK");
+      }
+    }
   }
 }
 
@@ -648,6 +816,31 @@ void check_menu_touch(int xx, int yy) {
 }
 
 void setup() {
+  for  (int keypin = 23; keypin <=43; keypin+=2) { 
+    pinMode(keypin, INPUT);
+    digitalWrite(keypin, HIGH);
+  } 
+  
+  pinMode(22, INPUT);
+  digitalWrite(22, HIGH);
+  lcd.begin(20,4);
+  Serial.begin(9600);     
+  Serial2.begin(9600);                                 //set baud rate for the hardware serial port_0 to 9600
+  sensorstring.reserve(30);                           //set aside some bytes for receiving data from Atlas Scientific product
+  sensors.begin();
+
+  lcd.setCursor(12,0);
+  lcd.print("PH");
+  lcd.setCursor(0,0);
+  lcd.print("Boil");  
+  lcd.setCursor(0,1);
+  lcd.print("RIMS");  
+  lcd.setCursor(0,2);
+  lcd.print("Out");  
+  lcd.setCursor(0,3);
+  lcd.print("Coil");  
+  
+
   Serial1.begin(9600);
   Serial.begin(9600);
 
@@ -664,7 +857,8 @@ void setup() {
 
   sol_update_time = millis()+sol_update_millis;
   flow_update_time = millis()+flow_update_millis;
-  
+  ds_temp_update_time = millis()+ds_temp_millis;
+
   // Clear the serial buffer
   char message[61];
   Serial1.readBytes(message, 61);
@@ -677,6 +871,135 @@ void setup() {
 }
 
 void loop(void) {
+
+  if (first_digit_entered && millis() > first_digit_timeout) {
+    first_digit_entered = false;
+    // Return the display to the previous set, since the second digit timed out
+    if ( menu==PIDBOIL || menu==MASH ) {
+      display_heater1_target();
+      display_heater2_target();  
+    } 
+    else {
+      display_heater1();
+      display_heater2();
+    }
+  }
+  int current_key = keyPressed();
+  if (button_must_clear) {
+    if (millis() > debounce_time) {
+      if (current_key < 0) {
+	button_must_clear = false;
+      }
+      else {
+	debounce_time = millis()+debounce_millis;
+      }
+    }
+  }
+  else if ( current_key >=0 && ( menu==BOIL || menu==PIDBOIL || menu==PUMPACROSS || menu==MASH )) {
+    if ( first_digit_entered ) {
+      // We've already got the first digit, so this completes the entry
+      float heater_set_f = first_digit*10 + current_key;
+      boolean pid = false;
+      int heater_num = 0;
+      switch (menu) {
+      case BOIL:
+	pid = false;
+	heater_num = 1;
+	break;
+      case PIDBOIL:
+	pid = true;
+	heater_num = 1;
+	break;
+      case PUMPACROSS:
+	pid = false;
+	heater_num = 2;
+	break;
+      case MASH:
+	pid = true;
+	heater_num = 2;
+	break;
+      }
+      if (heater_num == 1) {
+	if (pid) {
+	  send_heater1_temp(heater_set_f);
+	  heater1_target = heater_set_f;
+	  display_heater1_target();
+	}
+	else {
+	  send_heater1_percent(heater_set_f);
+	}
+	display_heater1();
+      }
+      else {
+	if (pid) {
+	  send_heater2_temp(heater_set_f);
+	  heater2_target = heater_set_f;
+	  display_heater2_target();
+	}
+	else {
+	  send_heater2_percent(heater_set_f);
+	}
+	display_heater2();
+      }
+      first_digit_entered = false;
+    }
+    else {
+      // Get the first digit
+      first_digit_entered = true;
+      first_digit = current_key;
+      first_digit_timeout = millis() + first_digit_millis;
+      // Show the first digit
+      if (menu==PIDBOIL || menu==MASH) {
+	tft.fillRect(25,160,120,40,ILI9341_BLACK);
+	tft.setCursor(25, 160);
+	tft.println(String(first_digit));
+      }
+      else {
+	tft.fillRect(25,120,120,40,ILI9341_BLACK);
+	tft.setCursor(25, 120);
+	tft.println(String(first_digit));
+      }
+    }
+    button_must_clear = true;
+    debounce_time = millis() + debounce_millis;
+  }
+	
+  if (Serial2.available() > 0) {                     //if we see that the Atlas Scientific product has sent a character
+    // Put a time limit on, just in case
+    Serial.println("Getting");
+    unsigned long max_wait = millis()+250;
+    while (Serial2.available() > 0 && millis()<max_wait) {
+      if (sensor_string_complete == true) {
+	// If we have read a complete line but still have remaining data, clear the current line
+	sensorstring = "";
+	sensor_string_complete = false;
+      }
+      char inchar = (char)Serial2.read();              //get the char we just received
+      sensorstring += inchar;                           //add the char to the var called sensorstring
+      if (inchar == '\r') {                             //if the incoming character is a <CR>
+	sensor_string_complete = true;                  //set the flag
+      }
+    }
+    Serial.println("Done"+sensorstring);
+  }
+
+  if (sensor_string_complete == true) {               //if a string from the Atlas Scientific product has been received in its entirety
+    if (isValidNumber(sensorstring.substring(0,4)) == true) {
+      lcd.setCursor(15,0);
+      lcd.print(sensorstring.substring(0,4));
+    }
+    sensorstring = "";                                //clear the string
+    sensor_string_complete = false;                   //reset the flag used to tell if we have received a completed string from the Atlas Scientific product
+  }
+  
+  if (millis() > ds_temp_update_time) {
+    sensors.requestTemperatures(); // Send the command to get temperatures
+    lcd.setCursor(5,2);
+    lcd.print(sensors.getTempCByIndex(0));    
+    lcd.setCursor(5,3);
+    lcd.print(sensors.getTempCByIndex(1));  
+    ds_temp_update_time = millis()+ds_temp_millis;  
+  }
 
   if (ctp.touched()) {
     // Retrieve a point  
@@ -738,6 +1061,12 @@ void loop(void) {
 	  menu = ADDWATER;
 	  prepare_addwater_menu();
 	}
+	else if ( xx >160 && yy >= 180 && yy <225) {
+	  // Ph Calibration
+	  clear_all();
+	  menu = PHCAL;
+	  prepare_phcal_menu();
+	}
 	break;
       case BOIL:
 	check_heater_touch(xx, yy, 1, 100, 0., false);
@@ -746,6 +1075,7 @@ void loop(void) {
 	break;
       case PIDBOIL:
 	check_heater_touch(xx, yy, 1, 60, 40., true);
+	//check_temp_touch(xx, yy, 1);
 	check_menu_touch(xx,yy);
 	check_pump_onoff_touch(xx,yy);
 	break;
@@ -770,6 +1100,10 @@ void loop(void) {
       case SPARGE:
 	check_menu_touch(xx,yy);
 	check_add_water_touch(xx, yy, true);
+	break;
+      case PHCAL:
+	check_menu_touch(xx,yy);
+	check_phcal_touch(xx, yy);
 	break;
       }
   } 
